@@ -12,7 +12,7 @@ const aaveLendingPool = "0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9";
 
 //AaveLendingPool Contract ABI (this is the Human-Readable ABI format)
 const aaveLPoolAbi = [
-  "function getReserveData (address asset) external view returns (DataTypes.ReserveData)",
+  "function getReserveData(address asset) external view returns (DataTypes.ReserveData)",
 ];
 
 // Query information for Compound_V2
@@ -25,7 +25,7 @@ const cTokenAbi = [
 
 
 // The Aave Contract object
-const aaveLPoolContract = new ethers.Contract(aaveLendingPool, aaveLPoolAbi, provider);
+const aaveLPoolContract = new ethers.Contract(aaveLendingPool, aaveLPoolAbi, randomWallet);
 
 // The Aave Contract object
 const compoundcDAIContract = new ethers.Contract(compoundcDAI, cTokenAbi, randomWallet);
@@ -36,10 +36,10 @@ const compoundcDAIContract = new ethers.Contract(compoundcDAI, cTokenAbi, random
 //Main Function
 
 const main = async () => {
-  //let aaveRate = await aaveLPoolContract.getReserveData(DAIaddress);
-  //console.log(aaveRate);
-  let compoundRate = await compoundcDAIContract.estimateGas.borrowRatePerBlock();
-  console.log(compoundRate);
+  let aaveRate = await aaveLPoolContract.getReserveData(DAIaddress);
+  console.log(aaveRate);
+  //let compoundRate = await compoundcDAIContract.estimateGas.borrowRatePerBlock();
+  //console.log(compoundRate);
 }
 
 main();
