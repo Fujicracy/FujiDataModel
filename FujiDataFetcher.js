@@ -2,6 +2,8 @@ const fs = require('fs');
 const fetch = require('node-fetch');
 const {request} =  require ('graphql-request');
 
+const dataTable = './Data.csv'
+
 /**
  * Returns Unix Epoch time.
  *
@@ -16,8 +18,8 @@ function getUnixT(_date){
 /**
  * Returns a meanRateRecord Object.
  *
- * @param {array} array_rateRecords The latest date in format 'YYYY-MM-DDTHH:MM:SSZ'
- * @return {float} mean Rate with fluctuations
+ * @param {array} array_rateRecords An array of RateRecord Objects
+ * @return {float} mean Rate between two time periods
  */
 function computeMeanRate(array_rateRecords, unix_startDate, unix_endDate) {
   let areaSum = 0;
@@ -56,8 +58,20 @@ class meanRateRecord {
   }
 }
 
+function addDataTable(_document, record){
+  fs.appendFile(_document,
+    record.protocol+', '+
+    record.timestamp0+', '+
+    record.timestamp1+', '+
+    record.borrow_rate+'\n',
+    function (err) {
+      if (err) throw err;
+      console.log('It\'s saved!');
+    });
+};
+
 /**
- * Returns Compound-Protocol Mean Borrowing Rate in a specified time range USING API.
+ * Returns Compound-Protocol's MeanRateRecord Object in a specified time range USING API.
  *
  * @param {string} asset The Compound-Protocol cToken Address to get Borrowing rates.
  * @param {string} maxDate The latest date in format 'YYYY-MM-DDTHH:MM:SSZ'
@@ -100,7 +114,7 @@ async function getCompoundBorrowRatesAPI(asset, minDate, maxDate){
 };
 
 /**
-* Returns Aave-Protocol V2 Mean Borrowing Rate in a specified time range using GraphQL.
+* Returns Aave-Protocol V2 MeanRateRecord Object in a specified time range using GraphQL.
 *
 * @param {string} asset The ERC20 Address to get Borrowing rates, ALL LOWER CASE.
 * @param {string} minDate The oldest date in format 'YYYY-MM-DDTHH:MM:SSZ'
@@ -110,8 +124,8 @@ async function getCompoundBorrowRatesAPI(asset, minDate, maxDate){
 
 async function getAaveBorrowRatesGraphQ(asset, minDate, maxDate){
 
-  let minblocktimestamp = new Date(minDate).getTime() / 1000;
-  let maxblocktimestamp = new Date(maxDate).getTime() / 1000;
+  let minblocktimestamp = getUnixT(minDate);
+  let maxblocktimestamp = getUnixT(maxDate);
 
   let query = `
     {
@@ -144,64 +158,46 @@ async function getAaveBorrowRatesGraphQ(asset, minDate, maxDate){
   return mObject;
 };
 
-//this code is not complete
-/**
-* Returns CompoundFinance Borrow Rates from time range USING GraphQL.
-*
-* @param {string} asset The ERC20 Address to get Borrowing rates, ALL LOWER CASE.
-* @param {string} maxDate The earliest date in format 'YYYY-MM-DDTHH:MM:SSZ'
-* @param {string} minDate The oldest date in format 'YYYY-MM-DDTHH:MM:SSZ'
-* @return {Object} Borrowing Rates Array of Objects
-*/
+async function getDyDxBorrowRatesAPI(){
+  let APIuri = "https://api.dydx.exchange/v1/markets/3";
+  let serverresponse = await fetch(APIuri);
+  let rObject = await serverresponse.json();
+  console.log(rObject);
+}
 
-async function getCompoundBorrowRatesGraphQ(asset, maxDate, minDate){
-  let maxblocktimestamp = new Date(maxDate).getTime() / 1000;
-  let minblocktimestamp = new Date(minDate).getTime() / 1000;
-  //console.log(maxblocktimestamp, minblocktimestamp);
-  let query = `
-    {
-      markets(where: {id: "${asset}", blockTimestamp_gt: ${minblocktimestamp}, blockTimestamp_lte: ${maxblocktimestamp} ) {
-        name
-        id
-        borrowRate
-        cash
-        reserves
-        totalBorrows
-        blockTimestamp
-      }
-    }
-    `
-  console.log(query);
-  let serverresponse = await request('https://api.thegraph.com/subgraphs/name/graphprotocol/compound-v2', query);
-  //console.log(serverresponse.reserve.paramsHistory.length);
-  console.log(serverresponse);
-  console.log(serverresponse.markets);
-};
+//getDyDxBorrowRatesAPI();
 
-/**
-* Returns Aave Borrow Rates from time range using API.
-*
-* @param {string} asset The variableDebtTokenAddress Address to get Borrowing rates, ALL LOWER CASE.
-* @param {string} maxDate The earliest date in format 'YYYY.MM.DD'
-* @param {string} minDate The oldest date in format 'YYYY.MM.DD'
-* @return {Object} Borrowing Rates Array of Objects
-*/
-async function getAaveBorrowRatesAPI(){
-    //let maxblocktimestamp = new Date(maxDate).getTime() / 1000;
-    //let minblocktimestamp = new Date(minDate).getTime() / 1000;
-    let APIuri = "https://aave-api-v2.aave.com/data/liquidity/v2?poolId=0xb53c1a33016b2dc2ff3653530bff1848a515c8c5&&timestamp<=1613843412";
-    let serverresponse = await fetch(APIuri);
-    let rObject = await serverresponse.json();
-    console.log(rObject[11].variableBorrowRate);
-};
+function builditerate(date1, date2, step){
+  let d1 = getUnixT(date1);
+  let d2 = getUnixT(date2);
+  let array =[];
+  array.push(d2);
+
+  do {
+    array.push(d2-step);
+    d2=d2-step;
+  } while (d2 >= d1);
+
+  for (var i = 0; i < array.length; i++) {
+    let temp =new Date(array[i]*1000);
+    array[i]=temp.toISOString();
+  }
+  return array;
+}
 
 const main = async () => {
 
-let cDai = await getCompoundBorrowRatesAPI("0x5d3a536E4D6DbD6114cc1Ead35777bAB948E3643","2021-02-21T16:00:00Z","2021-02-21T17:00:00Z");
-let aDai = await getAaveBorrowRatesGraphQ("0x6b175474e89094c44da98b954eedeac495271d0f","2021-02-21T16:00:00Z","2021-02-21T17:00:00Z");
-console.log(cDai, aDai);
+  let datearray = builditerate('2021-02-22T00:00:00Z','2021-02-24T00:00:00Z',3600);
+
+  for (var i = 1; i < datearray.length-1; i++) {
+    let resp1 = await getCompoundBorrowRatesAPI("0x5d3a536E4D6DbD6114cc1Ead35777bAB948E3643",datearray[i],datearray[i-1]);
+    console.log(resp1);
+    addDataTable(dataTable, resp1);
+    let resp2 = await getAaveBorrowRatesGraphQ("0x6b175474e89094c44da98b954eedeac495271d0f",datearray[i],datearray[i-1]);
+    console.log(resp2);
+    addDataTable(dataTable, resp2);
+  }
 }
 
 main();
-
-//let array=['24','23','22','21','20','19','18','17','16','15','14','13','12','11','10','09','08','07','06','05','04','03','02','01','00'];
+//const hours=['24','23','22','21','20','19','18','17','16','15','14','13','12','11','10','09','08','07','06','05','04','03','02','01','00'];
