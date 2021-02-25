@@ -165,18 +165,30 @@ async function getDyDxBorrowRatesAPI(){
   console.log(rObject);
 }
 
-//getDyDxBorrowRatesAPI();
+getDyDxBorrowRatesAPI();
 
-function builditerate(date1, date2, step){
-  let d1 = getUnixT(date1);
-  let d2 = getUnixT(date2);
+async function getCreamFiBorrowRatesAPI(){
+  let APIuri = "https://api.cream.finance/api/v1/rates?block_number=11924082&comptroller=eth";
+  let serverresponse = await fetch(APIuri);
+  let rObject = await serverresponse.json();
+  console.log(rObject.block_number);
+  console.log(rObject.borrowRates.filter(resp => resp.tokenSymbol == 'DAI'));
+  console.log(rObject.borrowRates.filter(resp => resp.tokenSymbol == 'USDC'));
+}
+
+//https://api.cream.finance/api/documentations/#/Ethereum/AppController_rates
+getCreamFiBorrowRatesAPI();
+
+function builditerate(oldestdate1, latestdate2, step){
+  let oldd1 = getUnixT(oldestdate1);
+  let earlyd2 = getUnixT(latestdate2);
   let array =[];
-  array.push(d2);
+  array.push(earlyd2);
 
   do {
-    array.push(d2-step);
-    d2=d2-step;
-  } while (d2 >= d1);
+    array.push(earlyd2-step);
+    earlyd2=earlyd2-step;
+  } while (earlyd2 >= oldd1);
 
   for (var i = 0; i < array.length; i++) {
     let temp =new Date(array[i]*1000);
@@ -187,7 +199,7 @@ function builditerate(date1, date2, step){
 
 const main = async () => {
 
-  let datearray = builditerate('2021-02-22T00:00:00Z','2021-02-24T00:00:00Z',3600);
+  let datearray = builditerate('2021-01-23T00:00:00Z','2021-02-24T21:00:00Z',3600);
 
   for (var i = 1; i < datearray.length-1; i++) {
     let resp1 = await getCompoundBorrowRatesAPI("0x5d3a536E4D6DbD6114cc1Ead35777bAB948E3643",datearray[i],datearray[i-1]);
@@ -199,5 +211,5 @@ const main = async () => {
   }
 }
 
-main();
+//main();
 //const hours=['24','23','22','21','20','19','18','17','16','15','14','13','12','11','10','09','08','07','06','05','04','03','02','01','00'];
