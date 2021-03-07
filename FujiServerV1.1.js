@@ -1,12 +1,16 @@
+require('dotenv').config();
 const fetch = require('node-fetch');
-const {request} =  require ('graphql-request');
+const { request } =  require ('graphql-request');
 const { ethers } = require("ethers");
 const fs = require('fs');
+const mongoose = require('mongoose');
+
+const Rate = require('./models/rate');
 
 const dataTable = './RegRecords.csv'
 const testTable = './TestRecords.csv'
 
-const url = 'https://mainnet.infura.io/v3/4d5f1b5afb094856bd8dcd86c7bd8dc1';
+const url = `https://mainnet.infura.io/v3/${process.env.INFURA_KEY}`;
 const provider = new ethers.providers.JsonRpcProvider(url);
 
 const DAIaddr = "0x6b175474e89094c44da98b954eedeac495271d0f";
@@ -23,6 +27,14 @@ const TUSDaddr = "0x0000000000085d4780b73119b644ae5ecd22b376";
 const bUSDaddr = "0x4fabb145d64652a948d72533023f6e7a623c7c53";
 const crbUSDaddr = "0x1ff8cdb51219a8838b52e9cac09b71e591bc998e";
 const gUSDaddr = "0x056fd409e1d7a124bd7017459dfea2f387b6d5cd";
+
+const dbURI = `imongodb+srv://${process.env.MONGO_DB_USER}:${process.env.MONGO_DB_PASSWORD}@cluster0.nsht4.mongodb.net/${process.env.MONGO_DB_DATABASE}?retryWrites=true&w=majority`;
+mongoose.connect(dbURI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(res => {
+    console.log("Connected to DB");
+    main();
+  })
+  .catch(err => console.log(err));
 
 class rateRecord {
 
@@ -248,24 +260,35 @@ let main = async () => {
   let creamresp6 = await getCreamFiBorrowRatesGraphQ(crbUSDaddr, back5blocks, timestamp);
   let aaveresp7 = await getAaveBorrowRatesGraphQ(gUSDaddr,back5blocks,timestamp);
 
-  let infoarray = [aaveresp, compresp, dydxresp, creamresp, aaveresp2, compresp2, dydxresp2,
+  let allProvidersData = [aaveresp, compresp, dydxresp, creamresp, aaveresp2, compresp2, dydxresp2,
                   creamresp2, aaveresp3, aaveresp4, compresp4,creamresp4, aaveresp5,aaveresp6,
                   creamresp6, aaveresp7
                   ];
-  console.log(infoarray);
-  addDataTable(dataTable, infoarray);
+  //console.log(allProvidersData);
+  allProvidersData.forEach((rateRecord) => {
+    const rateObj = new Rate({
+      protocol: rateRecord.protocol,
+      symbol: rateRecord.symbol,
+      borrowRate: rateRecord.borrow_rate,
+      totalLiquidity: rateRecord.total_liquidity,
+      utilizationRatio: rateRecord.utilization_ratio,
+    })
+
+    rateObj.save();
+  });
+  //addDataTable(dataTable, allProvidersData);
 
   let theborrowMarket = 0;
 
-  for (var i = 0; i < infoarray.length; i++) {
-    theborrowMarket = theborrowMarket + infoarray[i].total_liquidity;
+  for (var i = 0; i < allProvidersData.length; i++) {
+    theborrowMarket = theborrowMarket + allProvidersData[i].total_liquidity;
   }
   console.log(`The borrowMarket $${theborrowMarket}`)
-}
 
-setInterval(() => {
- main();
-}, 60000);
+  setInterval(() => {
+    main();
+  }, 60000);
+}
 
 //main();
 
