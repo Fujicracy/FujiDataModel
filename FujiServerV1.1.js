@@ -2,11 +2,14 @@ const fetch = require('node-fetch');
 const {request} =  require ('graphql-request');
 const { ethers } = require("ethers");
 const fs = require('fs');
+const ss = require('simple-statistics');
 
-const dataTable = './RegRecords.csv'
-const testTable = './TestRecords.csv'
+const dataTable = './RegRecords.csv';
+const statsTable = './StatsRecords.csv';
+const testTable = './TestRecords.csv';
 
 const url = 'https://mainnet.infura.io/v3/4d5f1b5afb094856bd8dcd86c7bd8dc1';
+const defiKey = '200c5b8de7c545ced1b58e8d060a4c6bca115cbd555eea0b2508031a2359';
 const provider = new ethers.providers.JsonRpcProvider(url);
 
 const DAIaddr = "0x6b175474e89094c44da98b954eedeac495271d0f";
@@ -37,12 +40,25 @@ class rateRecord {
 }
 
 class recordStats {
-  constructor(_averageRate, _stdev, _sVariance, _minRateRecord, _maxRateRecord, _timestamp){
+
+  constructor(_marketSymbol,
+              _averageRate,
+              _stdev,
+              _variance,
+              _minRateRecord,
+              _maxRateRecord,
+              _GASPrice,
+              _ETHPrice,
+              _timestamp
+  ){
+    this.marketSymbol = _marketSymbol;
     this.averageRate = _averageRate;
     this.stdev = _stdev;
-    this.sVariance = _sVariance;
+    this.variance = _variance;
     this.minRate = _minRateRecord;
-    this.maxRate = _maxRateRecord
+    this.maxRate = _maxRateRecord;
+    this.GasPrice = _GASPrice;
+    this.ETHPrice = _ETHPrice;
     this.timestamp = _timestamp;
   }
 }
@@ -209,7 +225,53 @@ async function getCreamFiBorrowRatesGraphQ(asset, block_number, _timestamp){
   }
 };
 
-function addDataTable(_document, records){
+async function buildStatRecord(_marketSymbol, records){
+
+  let gPrice = await getGasPrice();
+  let ethPrice = await getETHPrice();
+  let statsArray = computeStats(records);
+
+  let statRecord = new recordStats(
+              _marketSymbol,
+              statsArray[0],
+              statsArray[1],
+              statsArray[2],
+              records[statsArray[3]],
+              records[statsArray[4]],
+              gPrice,
+              ethPrice,
+              records[0].timestamp);
+  console.log(statRecord);
+
+  return statRecord;
+}
+
+async function getGasPrice(){
+  let APIuri = `https://ethgasstation.info/api/ethgasAPI.json?api-key=${defiKey}`;
+  let serverresponse = await fetch(APIuri);
+  let r0 = await serverresponse.json();
+  return r0.average/10;
+};
+
+async function getETHPrice(){
+  let APIuri = `https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd`;
+  let serverresponse = await fetch(APIuri);
+  let r0 = await serverresponse.json();
+  return r0.ethereum.usd;
+};
+
+function computeStats(_RateArray){
+  let values =[];
+  for (var i = 0; i < _RateArray.length; i++) {
+    values.push(_RateArray[i].borrow_rate);
+  }
+  let minpos = values.indexOf(ss.min(values));
+  let maxpos = values.indexOf(ss.max(values));
+  return [ss.mean(values), ss.standardDeviation(values), ss.variance(values), minpos, maxpos];
+};
+
+
+function addRatesDataTable(_document, records){
   for (var i = 0; i < records.length; i++) {
     fs.appendFile(_document,
       records[i].protocol+', '+
@@ -225,12 +287,33 @@ function addDataTable(_document, records){
   console.log(records[0].timestamp, ' Rates Registered!');
 };
 
+function addStatsDataTable(_document, srecord){
+    fs.appendFile(_document,
+      srecord.marketSymbol+', '+
+      srecord.averageRate+', '+
+      srecord.stdev+', '+
+      srecord.variance+', '+
+      srecord.minRate.borrow_rate+', '+
+      srecord.maxRate.borrow_rate+', '+
+      srecord.GasPrice+', '+
+      srecord.ETHprice+', '+
+      srecord.timestamp+'\n',
+      function (err) {
+        if (err) throw err;
+      });
+  console.log(srecord.marketSymbol, ' Stats Rates Registered!');
+};
+
+
 let main = async () => {
+
   let currentblock = await provider.getBlockNumber();
   let back5blocks = currentblock-5;
   let bdata = await provider.getBlock(back5blocks);
   let timestamp =  bdata.timestamp;
-  console.log(currentblock,timestamp);
+
+  console.log(back5blocks,timestamp);
+
   let aaveresp = await getAaveBorrowRatesGraphQ(DAIaddr,back5blocks,timestamp);
   let compresp = await getCompoundBorrowRatesGraphQ(cDAIaddr,back5blocks,timestamp);
   let dydxresp = await getDyDxBorrowRatesAPI(DAIaddr, timestamp);
@@ -252,8 +335,22 @@ let main = async () => {
                   creamresp2, aaveresp3, aaveresp4, compresp4,creamresp4, aaveresp5,aaveresp6,
                   creamresp6, aaveresp7
                   ];
+
   console.log(infoarray);
-  addDataTable(dataTable, infoarray);
+
+  let daiStatsRecord = buildStatRecord('DAI',[aaveresp, compresp, dydxresp, creamresp]);
+  //addStatsDataTable(statsTable,daiStatsRecord);
+  let usdcStatsRecord = buildStatRecord('USDC',[aaveresp2, compresp2, dydxresp2, creamresp2]);
+  //addStatsDataTable(statsTable,usdcStatsRecord);
+  let usdtStatsRecord = buildStatRecord('USDT',[aaveresp4, compresp4, creamresp4]);
+  //addStatsDataTable(statsTable,usdcStatsRecord);
+  let stablecoinStatRecord = buildStatRecord('StableCoins',infoarray);
+  //addStatsDataTable(statsTable, stablecoinStatRecord);
+
+  console.log(daiStatsRecord,usdcStatsRecord,usdtStatsRecord,stablecoinStatRecord);
+
+
+  addRatesDataTable(dataTable, infoarray);
 
   let theborrowMarket = 0;
 
@@ -261,37 +358,24 @@ let main = async () => {
     theborrowMarket = theborrowMarket + infoarray[i].total_liquidity;
   }
   console.log(`The borrowMarket $${theborrowMarket}`)
-}
+};
 
-setInterval(() => {
- main();
-}, 60000);
+//setInterval(() => {
+// main();
+//}, 60000);
 
-//main();
+main();
 
 let test = async () => {
-  let currentblock = await provider.getBlockNumber();
-  let back5blocks = currentblock-5;
-  let bdata = await provider.getBlock(back5blocks);
-  let timestamp =  bdata.timestamp;
-  console.log(currentblock, back5blocks, timestamp);
-  let aaveresp = await getAaveBorrowRatesGraphQ(DAIaddr,back5blocks,timestamp);
-  //let compresp = await getCompoundBorrowRatesGraphQ(cDAIaddr,back5blocks,timestamp);
-  //let dydxresp = await getDyDxBorrowRatesAPI(DAIaddr, timestamp);
-  //let creamresp = await getCreamFiBorrowRatesGraphQ(crDAIaddr, back5blocks, timestamp);
-  let aaveresp2 = await getAaveBorrowRatesGraphQ(USDCaddr,back5blocks,timestamp);
-  //let compresp2 = await getCompoundBorrowRatesGraphQ(cUSDCaddr,back5blocks,timestamp);
-  //let dydxresp2 = await getDyDxBorrowRatesAPI(USDCaddr, timestamp);
-  //let creamresp2 = await getCreamFiBorrowRatesGraphQ(crUSDCaddr, back5blocks, timestamp);
-  let aaveresp3 = await getAaveBorrowRatesGraphQ(sUSDaddr,back5blocks,timestamp);
-  let aaveresp4 = await getAaveBorrowRatesGraphQ(USDTaddr,back5blocks,timestamp);
-  //let compresp4 = await getCompoundBorrowRatesGraphQ(cUSDTaddr,back5blocks,timestamp);
-  //let creamresp4 = await getCreamFiBorrowRatesGraphQ(crUSDTaddr, back5blocks, timestamp);
-  let aaveresp5 = await getAaveBorrowRatesGraphQ(TUSDaddr,back5blocks,timestamp);
-  let aaveresp6 = await getAaveBorrowRatesGraphQ(bUSDaddr,back5blocks,timestamp);
-  //let creamresp6 = await getCreamFiBorrowRatesGraphQ(crbUSDaddr, back5blocks, timestamp);
-  let aaveresp7 = await getAaveBorrowRatesGraphQ(gUSDaddr,back5blocks,timestamp);
-  console.log(aaveresp, aaveresp2, aaveresp3, aaveresp4, aaveresp5, aaveresp6, aaveresp7);
-}
+
+  let x = [3,6,9,12,5,6,8,7,6,5,4,6,7,5,6,7,8];
+
+  let justanumber = ss.mean(x);
+  let themin =ss.min(x);
+  let themax =ss.max(x);
+  console.log(ss.mean(x), ss.standardDeviation(x), ss.variance(x));
+  console.log(gPrice,ethPrice, justanumber, themin, themax);
+
+};
 
 //test();
