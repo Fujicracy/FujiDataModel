@@ -241,7 +241,6 @@ async function buildStatRecord(_marketSymbol, records){
               gPrice,
               ethPrice,
               records[0].timestamp);
-  console.log(statRecord);
 
   return statRecord;
 }
@@ -287,21 +286,23 @@ function addRatesDataTable(_document, records){
   console.log(records[0].timestamp, ' Rates Registered!');
 };
 
-function addStatsDataTable(_document, srecord){
+function addStatsDataTable(_document, srecords){
+  for (var i = 0; i < srecords.length; i++) {
     fs.appendFile(_document,
-      srecord.marketSymbol+', '+
-      srecord.averageRate+', '+
-      srecord.stdev+', '+
-      srecord.variance+', '+
-      srecord.minRate.borrow_rate+', '+
-      srecord.maxRate.borrow_rate+', '+
-      srecord.GasPrice+', '+
-      srecord.ETHprice+', '+
-      srecord.timestamp+'\n',
+      srecords[i].marketSymbol+', '+
+      srecords[i].averageRate+', '+
+      srecords[i].stdev+', '+
+      srecords[i].variance+', '+
+      srecords[i].minRate.borrow_rate+', '+
+      srecords[i].maxRate.borrow_rate+', '+
+      srecords[i].GasPrice+', '+
+      srecords[i].ETHPrice+', '+
+      srecords[i].timestamp+'\n',
       function (err) {
         if (err) throw err;
       });
-  console.log(srecord.marketSymbol, ' Stats Rates Registered!');
+      console.log(srecords[i].marketSymbol, ' Stats Rates Registered!');
+  };
 };
 
 
@@ -337,20 +338,18 @@ let main = async () => {
                   ];
 
   console.log(infoarray);
-
-  let daiStatsRecord = buildStatRecord('DAI',[aaveresp, compresp, dydxresp, creamresp]);
-  //addStatsDataTable(statsTable,daiStatsRecord);
-  let usdcStatsRecord = buildStatRecord('USDC',[aaveresp2, compresp2, dydxresp2, creamresp2]);
-  //addStatsDataTable(statsTable,usdcStatsRecord);
-  let usdtStatsRecord = buildStatRecord('USDT',[aaveresp4, compresp4, creamresp4]);
-  //addStatsDataTable(statsTable,usdcStatsRecord);
-  let stablecoinStatRecord = buildStatRecord('StableCoins',infoarray);
-  //addStatsDataTable(statsTable, stablecoinStatRecord);
-
-  console.log(daiStatsRecord,usdcStatsRecord,usdtStatsRecord,stablecoinStatRecord);
-
-
   addRatesDataTable(dataTable, infoarray);
+
+  let daiStatsRecord = await buildStatRecord('DAI',[aaveresp, compresp, dydxresp, creamresp]);
+  let usdcStatsRecord = await buildStatRecord('USDC',[aaveresp2, compresp2, dydxresp2, creamresp2]);
+  let usdtStatsRecord = await buildStatRecord('USDT',[aaveresp4, compresp4, creamresp4]);
+  let stablecoinStatRecord = await buildStatRecord('StableCoins',infoarray);
+
+  let statsArray = [daiStatsRecord, usdcStatsRecord, usdtStatsRecord, stablecoinStatRecord];
+
+  console.log(statsArray);
+  addStatsDataTable(statsTable,statsArray);
+
 
   let theborrowMarket = 0;
 
