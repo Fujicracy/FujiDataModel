@@ -1,5 +1,0 @@
-subscription ReserveUpdateSubscription($pool: String) {
-  reserves(where: {pool: $pool}) {
-    ...ReserveData
-  }
-}
