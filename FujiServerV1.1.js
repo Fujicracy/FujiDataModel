@@ -359,21 +359,13 @@ let main = async () => {
   console.log(`The borrowMarket $${theborrowMarket}`)
 };
 
-//setInterval(() => {
-// main();
-//}, 60000);
+setInterval(() => {
+ main();
+}, 60000);
 
-main();
+//main();
 
 let test = async () => {
-
-  let x = [3,6,9,12,5,6,8,7,6,5,4,6,7,5,6,7,8];
-
-  let justanumber = ss.mean(x);
-  let themin =ss.min(x);
-  let themax =ss.max(x);
-  console.log(ss.mean(x), ss.standardDeviation(x), ss.variance(x));
-  console.log(gPrice,ethPrice, justanumber, themin, themax);
 
 };
 
