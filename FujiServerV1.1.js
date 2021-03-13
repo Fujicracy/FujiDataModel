@@ -81,34 +81,29 @@ async function getAaveBorrowRatesGraphQ(asset, blockNumber, _timestamp){
 
     let query = `{ reserve (id:"${asset}0xb53c1a33016b2dc2ff3653530bff1848a515c8c5", block: {number: ${blockNumber}})
     {symbol variableBorrowRate utilizationRate totalLiquidity decimals}}`;
-    let serverresponse = await request('https://api.thegraph.com/subgraphs/name/aave/protocol-v2', query);
+    let apiResponse = await request('https://api.thegraph.com/subgraphs/name/aave/protocol-v2', query);
 
-    let totalLiq = parseFloat((parseFloat(serverresponse.reserve.totalLiquidity)/10**(serverresponse.reserve.decimals)).toFixed(0))
+    let totalLiq = parseFloat((parseFloat(apiResponse.reserve.totalLiquidity)/10**(apiResponse.reserve.decimals)).toFixed(0))
 
-    let rObject = new rateRecord(
-              'Aave-V2',
-              serverresponse.reserve.symbol,
-              _timestamp,
-              parseFloat((parseFloat(serverresponse.reserve.variableBorrowRate)/1e27).toFixed(8)),
-              totalLiq,
-              parseFloat(serverresponse.reserve.utilizationRate)
-            );
-
-    return rObject;
-
+    return new rateRecord(
+      'Aave-V2',
+      apiResponse.reserve.symbol,
+      _timestamp,
+      parseFloat((parseFloat(apiResponse.reserve.variableBorrowRate)/1e27).toFixed(8)),
+      totalLiq,
+      parseFloat(apiResponse.reserve.utilizationRate)
+    );
   } catch (e) {
 
     console.log(`Aave-V2: Fetch error: ${_timestamp}`);
     console.log(e);
 
-    let rObject = new rateRecord(
-              'Aave-V2',
-              'error',
-              _timestamp,
-              0
-            );
-
-    return rObject;
+    return new rateRecord(
+      'Aave-V2',
+      'error',
+      _timestamp,
+      0
+    );
   }
 };
 
@@ -116,55 +111,51 @@ async function getCompoundBorrowRatesGraphQ(asset, blockNumber, _timestamp){
   try {
 
     let query = `{market (id: "${asset}",block: {number: ${blockNumber}}) {borrowRate underlyingSymbol cash reserves totalBorrows}}`
-    let serverresponse = await request('https://api.thegraph.com/subgraphs/name/graphprotocol/compound-v2', query);
+    let apiResponse = await request('https://api.thegraph.com/subgraphs/name/graphprotocol/compound-v2', query);
 
-    let totalCash = parseFloat(parseFloat(serverresponse.market.cash).toFixed(0));
-    let tBorrowed = parseFloat(parseFloat(serverresponse.market.totalBorrows).toFixed(0));
-    let reserv = parseFloat(serverresponse.market.reserves).toFixed(0);
+    let totalCash = parseFloat(parseFloat(apiResponse.market.cash).toFixed(0));
+    let tBorrowed = parseFloat(parseFloat(apiResponse.market.totalBorrows).toFixed(0));
+    let reserv = parseFloat(apiResponse.market.reserves).toFixed(0);
     let utilR = tBorrowed / (totalCash + tBorrowed - reserv);
     utilR = parseFloat(utilR.toFixed(8));
 
-    let rObject = new rateRecord(
-              'Compound-V2',
-              serverresponse.market.underlyingSymbol,
-              _timestamp,
-              parseFloat(parseFloat(serverresponse.market.borrowRate).toFixed(8)),
-              totalCash+tBorrowed,
-              utilR
-            );
-    return rObject;
+    return new rateRecord(
+      'Compound-V2',
+      apiResponse.market.underlyingSymbol,
+      _timestamp,
+      parseFloat(parseFloat(apiResponse.market.borrowRate).toFixed(8)),
+      totalCash+tBorrowed,
+      utilR
+    );
   } catch (e) {
 
     console.log(`Compound-V2: Fetch error: ${_timestamp}`);
     console.log(e);
 
-    let rObject = new rateRecord(
-              'Compound-V2',
-              'error',
-              _timestamp,
-              0
-            );
-
-    return rObject;
-
+    return new rateRecord(
+      'Compound-V2',
+      'error',
+      _timestamp,
+      0
+    );
   }
 };
 
 async function getDyDxBorrowRatesAPI(asset, _timestamp){
 
-  if (asset == DAIaddr) {
-    var id = 3;
-    var decimals = 18;
-  } else if (asset == USDCaddr) {
-    var id = 2;
-    var decimals = 6;
-  }
+  const id = asset == DAIaddr ? 3 : 2;
+  const decimals = asset == DAIaddr ? 18 : 6;
 
   try {
 
     let APIuri = `https://api.dydx.exchange/v1/markets/${id}`;
-    let serverresponse = await fetch(APIuri);
-    let rO = await serverresponse.json();
+    let apiResponse = await fetch(APIuri, { timeout: 1000 });
+
+    if (apiResponse.status !== 200) {
+      throw 'dYdX API error';
+    }
+
+    let rO = await apiResponse.json();
 
     let tBorrowed = parseFloat(rO.market.totalBorrowWei)/10**decimals;
     let tSupplied = parseFloat(rO.market.totalSupplyWei)/10**decimals;
@@ -172,31 +163,26 @@ async function getDyDxBorrowRatesAPI(asset, _timestamp){
     let utilR = tBorrowed / tSupplied;
     utilR = parseFloat(utilR.toFixed(8));
 
-    let rObject = new rateRecord(
-              'DyDx-V1',
-              rO.market.symbol,
-              _timestamp,
-              parseFloat(parseFloat(rO.market.totalBorrowAPR).toFixed(8)),
-              tSupplied,
-              utilR
-            );
-
-    return rObject;
+    return new rateRecord(
+      'DyDx-V1',
+      rO.market.symbol,
+      _timestamp,
+      parseFloat(parseFloat(rO.market.totalBorrowAPR).toFixed(8)),
+      tSupplied,
+      utilR
+    );
 
   } catch (e) {
 
     console.log(`DyDx-V1: Fetch error: ${_timestamp}`);
     console.log(e);
 
-    let rObject = new rateRecord(
-              'DyDx-V1',
-              'error',
-              _timestamp,
-              0
-            );
-
-    return rObject;
-
+    return new rateRecord(
+      'DyDx-V1',
+      'error',
+      _timestamp,
+      0
+    );
   }
 };
 
@@ -204,37 +190,33 @@ async function getCreamFiBorrowRatesGraphQ(asset, blockNumber, _timestamp){
   try {
 
     let query = `{market (id: "${asset}",block: {number: ${blockNumber}}) {borrowRate underlyingSymbol cash reserves totalBorrows}}`
-    let serverresponse = await request('https://api.thegraph.com/subgraphs/name/creamfinancedev/cream-lending', query);
+    let apiResponse = await request('https://api.thegraph.com/subgraphs/name/creamfinancedev/cream-lending', query);
 
-    let totalCash = parseFloat(parseFloat(serverresponse.market.cash).toFixed(0));
-    let tBorrowed = parseFloat(parseFloat(serverresponse.market.totalBorrows).toFixed(0));
-    let reserv = parseFloat(serverresponse.market.reserves).toFixed(0);
+    let totalCash = parseFloat(parseFloat(apiResponse.market.cash).toFixed(0));
+    let tBorrowed = parseFloat(parseFloat(apiResponse.market.totalBorrows).toFixed(0));
+    let reserv = parseFloat(apiResponse.market.reserves).toFixed(0);
     let utilR = tBorrowed / (totalCash + tBorrowed - reserv);
     utilR = parseFloat(utilR.toFixed(8));
 
-    let rObject = new rateRecord(
-              'CreamFi-V1',
-              serverresponse.market.underlyingSymbol,
-              _timestamp,
-              parseFloat(parseFloat(serverresponse.market.borrowRate).toFixed(8)),
-              totalCash+tBorrowed,
-              utilR
-            );
-    return rObject;
+    return new rateRecord(
+      'CreamFi-V1',
+      apiResponse.market.underlyingSymbol,
+      _timestamp,
+      parseFloat(parseFloat(apiResponse.market.borrowRate).toFixed(8)),
+      totalCash+tBorrowed,
+      utilR
+    );
   } catch (e) {
 
     console.log(`CreamFi-V1: Fetch error: ${_timestamp}`);
     console.log(e);
 
-    let rObject = new rateRecord(
-              'CreamFi-V1',
-              'error',
-              _timestamp,
-              0
-            );
-
-    return rObject;
-
+    return new rateRecord(
+      'CreamFi-V1',
+      'error',
+      _timestamp,
+      0
+    );
   }
 };
 
@@ -244,31 +226,30 @@ async function buildStatRecord(_marketSymbol, records){
   let ethPrice = await getethPrice();
   let statsArray = computeStats(records);
 
-  let statRecord = new recordStats(
-              _marketSymbol,
-              statsArray[0],
-              statsArray[1],
-              statsArray[2],
-              records[statsArray[3]],
-              records[statsArray[4]],
-              gPrice,
-              ethPrice,
-              records[0].timestamp);
-
-  return statRecord;
+  return new recordStats(
+    _marketSymbol,
+    statsArray[0],
+    statsArray[1],
+    statsArray[2],
+    records[statsArray[3]],
+    records[statsArray[4]],
+    gPrice,
+    ethPrice,
+    records[0].timestamp
+  );
 }
 
 async function getgasPrice(){
   let APIuri = `https://ethgasstation.info/api/ethgasAPI.json?api-key=${process.env.GASSTATION_KEY}`;
-  let serverresponse = await fetch(APIuri);
-  let r0 = await serverresponse.json();
+  let apiResponse = await fetch(APIuri);
+  let r0 = await apiResponse.json();
   return r0.average/10;
 };
 
 async function getethPrice(){
   let APIuri = `https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd`;
-  let serverresponse = await fetch(APIuri);
-  let r0 = await serverresponse.json();
+  let apiResponse = await fetch(APIuri);
+  let r0 = await apiResponse.json();
   return r0.ethereum.usd;
 };
 
@@ -351,12 +332,12 @@ function saveStats(records) {
 
 async function main() {
 
-  let currentblock = await provider.getBlockNumber();
-  let back5blocks = currentblock-5;
-  let bdata = await provider.getBlock(back5blocks);
+  let currentblock = await provider.getBlockNumber().catch(console.log);
+  let back5blocks = currentblock - 5;
+  let bdata = await provider.getBlock(back5blocks).catch(console.log);
   let timestamp =  bdata.timestamp;
 
-  console.log(back5blocks,timestamp);
+  console.log(back5blocks, timestamp);
 
   let aaveresp = await getAaveBorrowRatesGraphQ(DAIaddr, back5blocks, timestamp);
   let compresp = await getCompoundBorrowRatesGraphQ(cDAIaddr, back5blocks, timestamp);
@@ -401,12 +382,8 @@ async function main() {
   }
   console.log(`The borrowMarket $${theborrowMarket}`)
 
-  setInterval(() => {
-    main();
-  }, 60000);
+  setTimeout(() => main(), 60000);
 }
-
-main();
 
 let test = async () => {
 
