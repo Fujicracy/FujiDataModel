@@ -240,17 +240,27 @@ async function buildStatRecord(_marketSymbol, records){
 }
 
 async function getgasPrice(){
-  let APIuri = `https://ethgasstation.info/api/ethgasAPI.json?api-key=${process.env.GASSTATION_KEY}`;
-  let apiResponse = await fetch(APIuri);
-  let r0 = await apiResponse.json();
-  return r0.average/10;
+  try {
+    let APIuri = `https://ethgasstation.info/api/ethgasAPI.json?api-key=${process.env.GASSTATION_KEY}`;
+    let apiResponse = await fetch(APIuri);
+    let r0 = await apiResponse.json();
+    return r0.average/10;
+  }
+  catch (e) {
+    return 0;
+  }
 };
 
 async function getethPrice(){
-  let APIuri = `https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd`;
-  let apiResponse = await fetch(APIuri);
-  let r0 = await apiResponse.json();
-  return r0.ethereum.usd;
+  try {
+    let APIuri = `https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd`;
+    let apiResponse = await fetch(APIuri);
+    let r0 = await apiResponse.json();
+    return r0.ethereum.usd;
+  }
+  catch (e) {
+    return 0;
+  }
 };
 
 function computeStats(_RateArray){
